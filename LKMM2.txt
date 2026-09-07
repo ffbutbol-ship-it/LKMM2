@@ -1,0 +1,1652 @@
+-- LK MM2 - Versão 11.0
+-- Troll Player e Troll Chat implementados
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local Camera = Workspace.CurrentCamera
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local PlayerGui = player:WaitForChild("PlayerGui")
+
+local IMAGE_ID = "rbxassetid://79689090453359"
+
+local NORMAL = Color3.fromRGB(23,23,28)
+local HOVER = Color3.fromRGB(45,22,27)
+local ACTIVE = Color3.fromRGB(150,20,32)
+local TEXT = Color3.fromRGB(225,225,230)
+local SWITCH_OFF = Color3.fromRGB(40,40,45)
+local SWITCH_ON = Color3.fromRGB(200,30,40)
+
+-- Variáveis de estado
+local espObjects = {}
+local aimbotConnection = nil
+local espConnection = nil
+local hitboxConnection = nil
+local weaponESPConnection = nil
+local weaponNotifyConnection = nil
+local aimbotActive = false
+local aimbotMode = nil
+local showFOV = false
+local fovRing = nil
+local hitboxActive = false
+local hitboxSize = 5
+local hitboxStepper = nil
+local walkSpeedValue = 16
+local jumpPowerValue = 50
+local fullBrightActive = false
+local noFogActive = false
+
+-- Variáveis do Painel Shot
+local shotPanel = nil
+local espShotActive = false
+local espShotBeam = nil
+local espShotStartPart = nil
+local espShotEndPart = nil
+local espShotConnection = nil
+
+-- Variáveis Troll
+local trollPlayerPanel = nil
+local selectedTrollTarget = nil
+local trollChatPanel = nil
+local spamConnection = nil
+local spamActive = false
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "LK_MM2"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
+
+--------------------------------------------------
+-- NOTIFICAÇÃO
+--------------------------------------------------
+
+local notification = Instance.new("TextButton")
+notification.Size = UDim2.fromOffset(280,62)
+notification.Position = UDim2.new(.5,-140,0,20)
+notification.BackgroundColor3 = Color3.fromRGB(12,12,15)
+notification.Text = "LK MM2 EXECUTADO"
+notification.TextColor3 = Color3.new(1,1,1)
+notification.Font = Enum.Font.GothamBold
+notification.TextSize = 16
+notification.BorderSizePixel = 0
+notification.Parent = gui
+
+Instance.new("UICorner",notification).CornerRadius = UDim.new(0,14)
+
+local notifStroke = Instance.new("UIStroke",notification)
+notifStroke.Color = Color3.fromRGB(200,25,40)
+notifStroke.Thickness = 1
+
+notification.MouseButton1Click:Connect(function()
+    notification.Visible = false
+end)
+
+local function notify(text, duration)
+    notification.Text = text
+    notification.Visible = true
+    wait(duration or 2)
+    notification.Text = "LK MM2 EXECUTADO"
+end
+
+local function notifyShort(text)
+    notify(text, 1)
+end
+
+--------------------------------------------------
+-- BOLINHA FLUTUANTE
+--------------------------------------------------
+
+local floating = Instance.new("ImageButton")
+floating.Size = UDim2.fromOffset(54,54)
+floating.Position = UDim2.new(0,18,.5,-27)
+floating.BackgroundColor3 = Color3.fromRGB(190,20,35)
+floating.Image = IMAGE_ID
+floating.ScaleType = Enum.ScaleType.Crop
+floating.BorderSizePixel = 0
+floating.Parent = gui
+
+Instance.new("UICorner",floating).CornerRadius = UDim.new(1,0)
+
+local floatStroke = Instance.new("UIStroke",floating)
+floatStroke.Color = Color3.fromRGB(255,70,80)
+floatStroke.Thickness = 2
+
+--------------------------------------------------
+-- PAINEL PRINCIPAL
+--------------------------------------------------
+
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(570,380)
+main.Position = UDim2.new(.5,-285,.5,-190)
+main.BackgroundColor3 = Color3.fromRGB(9,9,12)
+main.BorderSizePixel = 0
+main.Visible = false
+main.Parent = gui
+
+Instance.new("UICorner",main).CornerRadius = UDim.new(0,16)
+
+local mainStroke = Instance.new("UIStroke",main)
+mainStroke.Color = Color3.fromRGB(45,45,52)
+mainStroke.Thickness = 1
+
+-- Logo, título, subtítulo
+local logo = Instance.new("ImageLabel")
+logo.Size = UDim2.fromOffset(42,42)
+logo.Position = UDim2.fromOffset(12,7)
+logo.BackgroundColor3 = Color3.fromRGB(22,22,27)
+logo.Image = IMAGE_ID
+logo.ScaleType = Enum.ScaleType.Crop
+logo.BorderSizePixel = 0
+logo.Parent = main
+Instance.new("UICorner",logo).CornerRadius = UDim.new(0,11)
+local logoStroke = Instance.new("UIStroke",logo)
+logoStroke.Color = Color3.fromRGB(180,25,38)
+logoStroke.Thickness = 1
+
+local title = Instance.new("TextLabel")
+title.Position = UDim2.fromOffset(63,7)
+title.Size = UDim2.new(1,-80,0,25)
+title.BackgroundTransparency = 1
+title.Text = "LK MM2"
+title.TextColor3 = Color3.new(1,1,1)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 21
+title.Parent = main
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Position = UDim2.fromOffset(64,32)
+subtitle.Size = UDim2.new(1,-80,0,17)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "MURDER MYSTERY 2  •  HUB FUNCIONAL"
+subtitle.TextColor3 = Color3.fromRGB(120,120,128)
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextSize = 9
+subtitle.Parent = main
+
+--------------------------------------------------
+-- ABAS E CONTEÚDO (com scroll melhorado)
+--------------------------------------------------
+
+local tabs = Instance.new("ScrollingFrame")
+tabs.Position = UDim2.fromOffset(10,63)
+tabs.Size = UDim2.fromOffset(145,305)
+tabs.BackgroundColor3 = Color3.fromRGB(15,15,19)
+tabs.BorderSizePixel = 0
+tabs.ScrollBarThickness = 4
+tabs.ScrollingDirection = Enum.ScrollingDirection.Y
+tabs.AutomaticCanvasSize = Enum.AutomaticSize.Y
+tabs.CanvasSize = UDim2.new(0,0,0,0)
+tabs.ClipsDescendants = true
+tabs.Parent = main
+
+Instance.new("UICorner",tabs).CornerRadius = UDim.new(0,12)
+
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.Padding = UDim.new(0,4)
+tabLayout.Parent = tabs
+
+local tabPadding = Instance.new("UIPadding")
+tabPadding.PaddingTop = UDim.new(0,7)
+tabPadding.PaddingLeft = UDim.new(0,6)
+tabPadding.PaddingRight = UDim.new(0,6)
+tabPadding.PaddingBottom = UDim.new(0,10)
+tabPadding.Parent = tabs
+
+local content = Instance.new("Frame")
+content.Position = UDim2.fromOffset(165,63)
+content.Size = UDim2.new(1,-175,1,-73)
+content.BackgroundColor3 = Color3.fromRGB(15,15,19)
+content.BorderSizePixel = 0
+content.Parent = main
+Instance.new("UICorner",content).CornerRadius = UDim.new(0,12)
+
+local pages = {}
+local function createPage(name)
+    local page = Instance.new("ScrollingFrame")
+    page.Name = name
+    page.Position = UDim2.fromOffset(10,10)
+    page.Size = UDim2.new(1,-20,1,-20)
+    page.BackgroundTransparency = 1
+    page.BorderSizePixel = 0
+    page.ScrollBarThickness = 2
+    page.Visible = false
+    page.Parent = content
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0,7)
+    layout.Parent = page
+    pages[name] = page
+    return page
+end
+
+--------------------------------------------------
+-- COMPONENTE: TOGGLE SWITCH MODERNO
+--------------------------------------------------
+
+local function createToggle(parent, text, onToggle)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1,-3,0,39)
+    container.BackgroundColor3 = NORMAL
+    container.BorderSizePixel = 0
+    container.Parent = parent
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0,9)
+
+    local label = Instance.new("TextLabel")
+    label.Position = UDim2.fromOffset(13,0)
+    label.Size = UDim2.new(1,-65,1,0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = TEXT
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 12
+    label.Parent = container
+
+    local switch = Instance.new("Frame")
+    switch.Size = UDim2.fromOffset(44,22)
+    switch.Position = UDim2.new(1,-57,0,8.5)
+    switch.BackgroundColor3 = SWITCH_OFF
+    switch.BorderSizePixel = 0
+    switch.Parent = container
+    Instance.new("UICorner", switch).CornerRadius = UDim.new(1,0)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.fromOffset(18,18)
+    knob.Position = UDim2.fromOffset(2,2)
+    knob.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    knob.BorderSizePixel = 0
+    knob.Parent = switch
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
+
+    local enabled = false
+
+    local function setVisual(state)
+        if state then
+            switch.BackgroundColor3 = SWITCH_ON
+            knob:TweenPosition(UDim2.fromOffset(24,2), "Out", "Quad", 0.15, true)
+        else
+            switch.BackgroundColor3 = SWITCH_OFF
+            knob:TweenPosition(UDim2.fromOffset(2,2), "Out", "Quad", 0.15, true)
+        end
+    end
+
+    local switchButton = Instance.new("TextButton")
+    switchButton.Size = UDim2.new(1,0,1,0)
+    switchButton.BackgroundTransparency = 1
+    switchButton.Text = ""
+    switchButton.Parent = switch
+
+    switchButton.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        setVisual(enabled)
+        if onToggle then
+            onToggle(enabled)
+        end
+    end)
+
+    setVisual(false)
+
+    return container
+end
+
+--------------------------------------------------
+-- COMPONENTE: BOTÃO DE AÇÃO (clique único)
+--------------------------------------------------
+
+local function createButton(parent, text, onClick)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1,-3,0,39)
+    button.BackgroundColor3 = NORMAL
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = TEXT
+    button.TextXAlignment = Enum.TextXAlignment.Left
+    button.Font = Enum.Font.GothamMedium
+    button.TextSize = 12
+    button.Parent = parent
+
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0,13)
+    padding.Parent = button
+    Instance.new("UICorner",button).CornerRadius = UDim.new(0,9)
+    local stroke = Instance.new("UIStroke",button)
+    stroke.Color = Color3.fromRGB(35,35,42)
+    stroke.Thickness = 1
+
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button,TweenInfo.new(.12),{BackgroundColor3 = HOVER}):Play()
+    end)
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button,TweenInfo.new(.12),{BackgroundColor3 = NORMAL}):Play()
+    end)
+
+    button.MouseButton1Click:Connect(function()
+        TweenService:Create(button,TweenInfo.new(.1),{BackgroundColor3 = ACTIVE}):Play()
+        wait(.1)
+        TweenService:Create(button,TweenInfo.new(.1),{BackgroundColor3 = NORMAL}):Play()
+        if onClick then onClick() end
+    end)
+
+    return button
+end
+
+--------------------------------------------------
+-- COMPONENTE: STEPPER (- e +)
+--------------------------------------------------
+
+local function createStepper(parent, min, max, default, onChanged)
+    local stepperFrame = Instance.new("Frame")
+    stepperFrame.Size = UDim2.new(1,-3,0,30)
+    stepperFrame.BackgroundColor3 = NORMAL
+    stepperFrame.BorderSizePixel = 0
+    stepperFrame.Parent = parent
+    Instance.new("UICorner", stepperFrame).CornerRadius = UDim.new(0,8)
+
+    local minusBtn = Instance.new("TextButton")
+    minusBtn.Size = UDim2.fromOffset(40,22)
+    minusBtn.Position = UDim2.new(0,5,0,4)
+    minusBtn.BackgroundColor3 = Color3.fromRGB(35,35,42)
+    minusBtn.BorderSizePixel = 0
+    minusBtn.Text = "-"
+    minusBtn.TextColor3 = TEXT
+    minusBtn.Font = Enum.Font.GothamBold
+    minusBtn.TextSize = 16
+    minusBtn.Parent = stepperFrame
+    Instance.new("UICorner", minusBtn).CornerRadius = UDim.new(0,6)
+
+    local plusBtn = Instance.new("TextButton")
+    plusBtn.Size = UDim2.fromOffset(40,22)
+    plusBtn.Position = UDim2.new(1,-45,0,4)
+    plusBtn.BackgroundColor3 = Color3.fromRGB(35,35,42)
+    plusBtn.BorderSizePixel = 0
+    plusBtn.Text = "+"
+    plusBtn.TextColor3 = TEXT
+    plusBtn.Font = Enum.Font.GothamBold
+    plusBtn.TextSize = 16
+    plusBtn.Parent = stepperFrame
+    Instance.new("UICorner", plusBtn).CornerRadius = UDim.new(0,6)
+
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(1,-90,0,22)
+    valueLabel.Position = UDim2.new(0,45,0,4)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = tostring(default)
+    valueLabel.TextColor3 = TEXT
+    valueLabel.Font = Enum.Font.GothamMedium
+    valueLabel.TextSize = 12
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Center
+    valueLabel.Parent = stepperFrame
+
+    local currentValue = default
+
+    local function updateValue(newValue)
+        currentValue = math.clamp(newValue, min, max)
+        valueLabel.Text = tostring(currentValue)
+        if onChanged then onChanged(currentValue) end
+    end
+
+    minusBtn.MouseButton1Click:Connect(function()
+        updateValue(currentValue - 1)
+    end)
+    plusBtn.MouseButton1Click:Connect(function()
+        updateValue(currentValue + 1)
+    end)
+
+    return stepperFrame
+end
+
+--------------------------------------------------
+-- FUNÇÕES AUXILIARES
+--------------------------------------------------
+
+local function getAlivePlayers()
+    local alive = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+            table.insert(alive, plr)
+        end
+    end
+    return alive
+end
+
+local function getRole(plr)
+    local char = plr.Character
+    if not char then return "Inocente" end
+
+    if char:GetAttribute("IsMurderer") then
+        return "Assassino"
+    elseif char:GetAttribute("IsSheriff") then
+        return "Sheriff"
+    end
+
+    for _, item in ipairs(char:GetChildren()) do
+        if item:IsA("Tool") then
+            local name = item.Name:lower()
+            if name:find("knife") or name:find("murder") or name:find("faca") then
+                return "Assassino"
+            elseif name:find("gun") or name:find("sheriff") or name:find("arma") then
+                return "Sheriff"
+            end
+        end
+    end
+
+    local backpack = plr:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") then
+                local name = item.Name:lower()
+                if name:find("knife") or name:find("murder") or name:find("faca") then
+                    return "Assassino"
+                elseif name:find("gun") or name:find("sheriff") or name:find("arma") then
+                    return "Sheriff"
+                end
+            end
+        end
+    end
+
+    local roleFolder = char:FindFirstChild("Role") or char:FindFirstChild("Murderer") or char:FindFirstChild("Sheriff")
+    if roleFolder then
+        if roleFolder.Name == "Murderer" or (roleFolder:IsA("BoolValue") and roleFolder.Value and roleFolder.Name == "IsMurderer") then
+            return "Assassino"
+        elseif roleFolder.Name == "Sheriff" or (roleFolder:IsA("BoolValue") and roleFolder.Value and roleFolder.Name == "IsSheriff") then
+            return "Sheriff"
+        end
+    end
+
+    return "Inocente"
+end
+
+local function roleColor(role)
+    if role == "Assassino" then return Color3.fromRGB(255,0,0)
+    elseif role == "Sheriff" then return Color3.fromRGB(0,100,255)
+    else return Color3.fromRGB(0,255,0) end
+end
+
+local function hasLineOfSight(targetPosition)
+    local camPos = Camera.CFrame.Position
+    local ray = Ray.new(camPos, (targetPosition - camPos).Unit * 500)
+    local hit = Workspace:FindPartOnRayWithIgnoreList(ray, {player.Character}, false, true)
+    return hit == nil
+end
+
+local function worldToScreen(position)
+    local screenPos, onScreen = Camera:WorldToScreenPoint(position)
+    return Vector2.new(screenPos.X, screenPos.Y), onScreen
+end
+
+--------------------------------------------------
+-- FUNÇÕES DA ARMA DO XERIFE
+--------------------------------------------------
+
+local function getSheriffPlayer()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and getRole(plr) == "Sheriff" then
+            return plr
+        end
+    end
+    return nil
+end
+
+local function findSheriffGunOnGround()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Tool") then
+            local name = obj.Name:lower()
+            if name:find("gun") or name:find("sheriff") or name:find("arma") then
+                local parent = obj.Parent
+                if parent and not parent:FindFirstChild("Humanoid") then
+                    return obj
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function findSheriffGunInHand()
+    local sheriff = getSheriffPlayer()
+    if sheriff and sheriff.Character then
+        for _, item in ipairs(sheriff.Character:GetChildren()) do
+            if item:IsA("Tool") and (item.Name:lower():find("gun") or item.Name:lower():find("sheriff")) then
+                return item, sheriff
+            end
+        end
+        local backpack = sheriff:FindFirstChild("Backpack")
+        if backpack then
+            for _, item in ipairs(backpack:GetChildren()) do
+                if item:IsA("Tool") and (item.Name:lower():find("gun") or item.Name:lower():find("sheriff")) then
+                    return item, sheriff
+                end
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function getSheriffGun()
+    local gunOnGround = findSheriffGunOnGround()
+    if gunOnGround then
+        return gunOnGround, nil
+    end
+    local gunInHand, sheriff = findSheriffGunInHand()
+    if gunInHand then
+        return gunInHand, sheriff
+    end
+    return nil, nil
+end
+
+local function startWeaponESP()
+    if weaponESPConnection then weaponESPConnection:Disconnect() end
+    weaponESPConnection = RunService.RenderStepped:Connect(function()
+        local gun = findSheriffGunOnGround()
+        if gun then
+            if not gun:FindFirstChild("WeaponHighlight") then
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "WeaponHighlight"
+                highlight.FillColor = Color3.fromRGB(255,128,0)
+                highlight.FillTransparency = 0.5
+                highlight.OutlineColor = Color3.fromRGB(255,128,0)
+                highlight.OutlineTransparency = 0
+                highlight.Parent = gun
+            end
+        else
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj:IsA("Highlight") and obj.Name == "WeaponHighlight" then
+                    obj:Destroy()
+                end
+            end
+        end
+    end)
+end
+
+local function stopWeaponESP()
+    if weaponESPConnection then weaponESPConnection:Disconnect() end
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Highlight") and obj.Name == "WeaponHighlight" then
+            obj:Destroy()
+        end
+    end
+end
+
+local function startWeaponNotify()
+    if weaponNotifyConnection then weaponNotifyConnection:Disconnect() end
+    local lastState = false
+    weaponNotifyConnection = RunService.Heartbeat:Connect(function()
+        local gun = findSheriffGunOnGround()
+        local currentState = gun ~= nil
+        if currentState and not lastState then
+            notify("🔫 Arma do Xerife está no chão!")
+        end
+        lastState = currentState
+    end)
+end
+
+local function stopWeaponNotify()
+    if weaponNotifyConnection then weaponNotifyConnection:Disconnect() end
+end
+
+local function teleportToGun()
+    local gun, sheriff = getSheriffGun()
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    if gun and not sheriff then
+        local pos = gun:IsA("BasePart") and gun.Position or gun:GetPivot().Position
+        root.CFrame = CFrame.new(pos + Vector3.new(0,2,0))
+        notify("Teleportado para a arma do Xerife (chão)")
+    elseif gun and sheriff then
+        if sheriff.Character and sheriff.Character:FindFirstChild("HumanoidRootPart") then
+            root.CFrame = sheriff.Character.HumanoidRootPart.CFrame + Vector3.new(0,2,0)
+            notify("Teleportado para o Xerife (arma com ele)")
+        else
+            notify("Xerife não encontrado")
+        end
+    else
+        notify("Arma do Xerife não encontrada")
+    end
+end
+
+--------------------------------------------------
+-- TP GERAL
+--------------------------------------------------
+
+local function teleportAllPlayers()
+    local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then
+        notify("Seu personagem não está carregado")
+        return
+    end
+
+    local targetCFrame = myRoot.CFrame * CFrame.new(0, 0, -5)
+    local count = 0
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local root = plr.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                plr.Character:PivotTo(targetCFrame)
+                count = count + 1
+            end
+        end
+    end
+    notifyShort("Teleportando... (" .. count .. " jogadores)")
+end
+
+--------------------------------------------------
+-- FUNÇÕES DO PAINEL SHOT
+--------------------------------------------------
+
+local function getMurdererPlayer()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and getRole(plr) == "Assassino" then
+            return plr
+        end
+    end
+    return nil
+end
+
+local function startESPShot()
+    stopESPShot()
+    espShotActive = true
+
+    espShotStartPart = Instance.new("Part")
+    espShotStartPart.Size = Vector3.new(0.1, 0.1, 0.1)
+    espShotStartPart.Transparency = 1
+    espShotStartPart.CanCollide = false
+    espShotStartPart.Anchored = true
+    espShotStartPart.Parent = Workspace
+
+    espShotEndPart = Instance.new("Part")
+    espShotEndPart.Size = Vector3.new(0.1, 0.1, 0.1)
+    espShotEndPart.Transparency = 1
+    espShotEndPart.CanCollide = false
+    espShotEndPart.Anchored = true
+    espShotEndPart.Parent = Workspace
+
+    local beam = Instance.new("Beam")
+    beam.Attachment0 = Instance.new("Attachment", espShotStartPart)
+    beam.Attachment1 = Instance.new("Attachment", espShotEndPart)
+    beam.Color = ColorSequence.new(Color3.fromRGB(255,0,0))
+    beam.Width0 = 0.2
+    beam.Width1 = 0.2
+    beam.FaceCamera = true
+    beam.Parent = Workspace
+    espShotBeam = beam
+
+    espShotConnection = RunService.RenderStepped:Connect(function()
+        local murderer = getMurdererPlayer()
+        local myChar = player.Character
+        if not murderer or not myChar then
+            espShotStartPart.Position = myChar and myChar.HumanoidRootPart.Position or Vector3.new(0,0,0)
+            espShotEndPart.Position = espShotStartPart.Position
+            return
+        end
+
+        local startPos = myChar.HumanoidRootPart.Position + Vector3.new(0,1.5,0)
+        local tool = myChar:FindFirstChildOfClass("Tool")
+        if tool and tool:FindFirstChild("Handle") then
+            startPos = tool.Handle.Position
+        end
+
+        local murdererHead = murderer.Character and murderer.Character:FindFirstChild("Head")
+        local endPos = murdererHead and murdererHead.Position or startPos
+
+        espShotStartPart.Position = startPos
+        espShotEndPart.Position = endPos
+    end)
+
+    notify("ESP Shot ativado")
+end
+
+local function stopESPShot()
+    if espShotConnection then
+        espShotConnection:Disconnect()
+        espShotConnection = nil
+    end
+    if espShotBeam then
+        espShotBeam:Destroy()
+        espShotBeam = nil
+    end
+    if espShotStartPart then
+        espShotStartPart:Destroy()
+        espShotStartPart = nil
+    end
+    if espShotEndPart then
+        espShotEndPart:Destroy()
+        espShotEndPart = nil
+    end
+    espShotActive = false
+end
+
+local function shootMurder()
+    local murderer = getMurdererPlayer()
+    if not murderer or not murderer.Character then
+        notify("Assassino não encontrado")
+        return
+    end
+
+    local tool = player.Character and player.Character:FindFirstChildOfClass("Tool")
+    if not tool then
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            for _, item in ipairs(backpack:GetChildren()) do
+                if item:IsA("Tool") and (item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("arma")) then
+                    player.Character.Humanoid:EquipTool(item)
+                    tool = item
+                    break
+                end
+            end
+        end
+    end
+
+    if not tool then
+        notify("Você não tem uma arma de fogo")
+        return
+    end
+
+    tool:Activate()
+    wait(0.1)
+    tool:Deactivate()
+
+    notify("Tiro disparado no assassino")
+end
+
+--------------------------------------------------
+-- DEMAIS FUNÇÕES
+--------------------------------------------------
+
+local function startESP()
+    if espConnection then espConnection:Disconnect() end
+    espConnection = RunService.RenderStepped:Connect(function()
+        for _, obj in ipairs(espObjects) do
+            if obj then obj:Destroy() end
+        end
+        espObjects = {}
+
+        for _, plr in ipairs(getAlivePlayers()) do
+            local char = plr.Character
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local head = char:FindFirstChild("Head")
+            if root and head then
+                local role = getRole(plr)
+                local color = roleColor(role)
+
+                if not char:FindFirstChild("ESP_Highlight") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = "ESP_Highlight"
+                    highlight.FillColor = color
+                    highlight.FillTransparency = 0.7
+                    highlight.OutlineColor = color
+                    highlight.OutlineTransparency = 0
+                    highlight.Parent = char
+                    table.insert(espObjects, highlight)
+                end
+
+                local billboard = char:FindFirstChild("ESP_Billboard")
+                if not billboard then
+                    billboard = Instance.new("BillboardGui")
+                    billboard.Name = "ESP_Billboard"
+                    billboard.Size = UDim2.new(0,200,0,50)
+                    billboard.StudsOffset = Vector3.new(0,2.5,0)
+                    billboard.AlwaysOnTop = true
+                    billboard.Parent = char
+
+                    local label = Instance.new("TextLabel")
+                    label.Size = UDim2.new(1,0,1,0)
+                    label.BackgroundTransparency = 1
+                    label.TextColor3 = color
+                    label.Font = Enum.Font.GothamBold
+                    label.TextSize = 14
+                    label.Parent = billboard
+                    table.insert(espObjects, billboard)
+                end
+                local label = billboard:FindFirstChildOfClass("TextLabel")
+                if label then
+                    local distance = (root.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                    label.Text = plr.Name .. " [" .. role .. "]\n" .. math.floor(distance) .. "m"
+                end
+            end
+        end
+    end)
+end
+
+local function stopESP()
+    if espConnection then espConnection:Disconnect() end
+    for _, obj in ipairs(espObjects) do
+        if obj then obj:Destroy() end
+    end
+    espObjects = {}
+end
+
+local function startHitbox()
+    hitboxActive = true
+    if hitboxConnection then hitboxConnection:Disconnect() end
+    hitboxConnection = RunService.RenderStepped:Connect(function()
+        if not hitboxActive then return end
+        for _, plr in ipairs(getAlivePlayers()) do
+            local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                root.Transparency = 0.5
+            end
+        end
+    end)
+end
+
+local function stopHitbox()
+    hitboxActive = false
+    if hitboxConnection then hitboxConnection:Disconnect() end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.Size = Vector3.new(2,2,1)
+            root.Transparency = 0
+        end
+    end
+end
+
+local function createFOVRing(radius)
+    if fovRing then fovRing:Destroy() end
+
+    fovRing = Instance.new("Frame")
+    fovRing.Size = UDim2.fromOffset(radius*2, radius*2)
+    fovRing.Position = UDim2.new(0.5, -radius, 0.5, -radius)
+    fovRing.BackgroundTransparency = 1
+    fovRing.BorderSizePixel = 0
+    fovRing.ZIndex = 10
+    fovRing.Parent = gui
+
+    local outer = Instance.new("Frame")
+    outer.Size = UDim2.new(1,0,1,0)
+    outer.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    outer.BackgroundTransparency = 0.4
+    outer.BorderSizePixel = 0
+    outer.ZIndex = 10
+    outer.Parent = fovRing
+    Instance.new("UICorner", outer).CornerRadius = UDim.new(1,0)
+
+    local innerSize = radius * 2 - 8
+    local inner = Instance.new("Frame")
+    inner.Size = UDim2.fromOffset(innerSize, innerSize)
+    inner.Position = UDim2.new(0.5, -innerSize/2, 0.5, -innerSize/2)
+    inner.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    inner.BackgroundTransparency = 0
+    inner.BorderSizePixel = 0
+    inner.ZIndex = 11
+    inner.Parent = fovRing
+    Instance.new("UICorner", inner).CornerRadius = UDim.new(1,0)
+end
+
+local function showFOVCircle()
+    local radius = (aimbotMode == "Assassino") and 120 or 200
+    createFOVRing(radius)
+end
+
+local function hideFOVCircle()
+    if fovRing then fovRing:Destroy() end
+    fovRing = nil
+end
+
+local function startAimbot(mode)
+    if aimbotConnection then aimbotConnection:Disconnect() end
+    aimbotActive = true
+    aimbotMode = mode
+
+    local fovSize = (mode == "Assassino") and 120 or 200
+
+    aimbotConnection = RunService.RenderStepped:Connect(function()
+        if not aimbotActive then return end
+
+        local myChar = player.Character
+        if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+
+        local enemies = {}
+        for _, plr in ipairs(getAlivePlayers()) do
+            local role = getRole(plr)
+            if mode == "Assassino" then
+                if role ~= "Assassino" then
+                    table.insert(enemies, plr)
+                end
+            elseif mode == "Sheriff" then
+                if role == "Assassino" then
+                    table.insert(enemies, plr)
+                end
+            end
+        end
+
+        local bestTarget = nil
+        local bestDistance = math.huge
+
+        for _, plr in ipairs(enemies) do
+            local char = plr.Character
+            local head = char and char:FindFirstChild("Head")
+            if head then
+                local screenPos, onScreen = worldToScreen(head.Position)
+                if onScreen then
+                    local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+                    local distanceFromCenter = (screenPos - screenCenter).Magnitude
+                    if distanceFromCenter <= fovSize and hasLineOfSight(head.Position) then
+                        if distanceFromCenter < bestDistance then
+                            bestDistance = distanceFromCenter
+                            bestTarget = head
+                        end
+                    end
+                end
+            end
+        end
+
+        if bestTarget then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, bestTarget.Position)
+        end
+    end)
+
+    if showFOV then
+        showFOVCircle()
+    end
+end
+
+local function stopAimbot()
+    aimbotActive = false
+    if aimbotConnection then aimbotConnection:Disconnect() end
+    aimbotConnection = nil
+    aimbotMode = nil
+    hideFOVCircle()
+end
+
+local function applyMovement()
+    local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.WalkSpeed = walkSpeedValue
+        humanoid.JumpPower = jumpPowerValue
+    end
+end
+
+player.CharacterAdded:Connect(function()
+    applyMovement()
+end)
+
+local function startFullBright()
+    fullBrightActive = true
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+end
+
+local function stopFullBright()
+    fullBrightActive = false
+    Lighting.Brightness = 1
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = true
+end
+
+local function startNoFog()
+    noFogActive = true
+    Lighting.FogStart = 0
+    Lighting.FogEnd = 100000
+end
+
+local function stopNoFog()
+    noFogActive = false
+    Lighting.FogStart = 0
+    Lighting.FogEnd = 500
+end
+
+local function teleportToPlayer(targetPlayer)
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0,2,0)
+        end
+    end
+end
+
+local function teleportToLobby()
+    for _, part in ipairs(Workspace:GetDescendants()) do
+        if part:IsA("SpawnLocation") or part.Name:lower():find("lobby") or part.Name:lower():find("spawn") then
+            local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.CFrame = part.CFrame + Vector3.new(0,3,0)
+                return
+            end
+        end
+    end
+end
+
+local function teleportToMap()
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        root.CFrame = CFrame.new(0, 10, 0)
+    end
+end
+
+local function equipKnife()
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and item.Name:lower():find("knife") then
+                player.Character.Humanoid:EquipTool(item)
+                notify("Faca equipada: " .. item.Name)
+                return
+            end
+        end
+    end
+    notify("Nenhuma faca encontrada")
+end
+
+local function equipGun()
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and item.Name:lower():find("gun") then
+                player.Character.Humanoid:EquipTool(item)
+                notify("Arma equipada: " .. item.Name)
+                return
+            end
+        end
+    end
+    notify("Nenhuma arma encontrada")
+end
+
+-- Troll functions
+local function sendChatMessage(message)
+    local chatEvent = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    if chatEvent then
+        local sayMessageRequest = chatEvent:FindFirstChild("SayMessageRequest")
+        if sayMessageRequest then
+            sayMessageRequest:FireServer(message, "All")
+        end
+    end
+end
+
+local function ejectPlayer(targetPlayer)
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        targetPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(0, 10000, 0) -- Fora do mapa
+        notify(targetPlayer.Name .. " foi ejetado!")
+    else
+        notify("Jogador não encontrado")
+    end
+end
+
+--------------------------------------------------
+-- SISTEMA DE PÁGINAS
+--------------------------------------------------
+
+local tabNames = {
+    "Início", "ESP", "Combate", "Player", "Visual", "Troll", "Teleporte", "Inventário", "Perfil", "Discord", "Configurações"
+}
+local tabButtons = {}
+
+local function showPage(name)
+    for pageName,page in pairs(pages) do
+        page.Visible = pageName == name
+    end
+    for tabName,tab in pairs(tabButtons) do
+        if tabName == name then
+            tab.BackgroundColor3 = ACTIVE
+            tab.TextColor3 = Color3.new(1,1,1)
+        else
+            tab.BackgroundColor3 = Color3.fromRGB(21,21,26)
+            tab.TextColor3 = Color3.fromRGB(185,185,192)
+        end
+    end
+end
+
+for _,name in ipairs(tabNames) do
+    local tab = Instance.new("TextButton")
+    tab.Size = UDim2.new(1,0,0,34)
+    tab.BackgroundColor3 = Color3.fromRGB(21,21,26)
+    tab.BorderSizePixel = 0
+    tab.Text = name
+    tab.TextColor3 = Color3.fromRGB(185,185,192)
+    tab.Font = Enum.Font.GothamMedium
+    tab.TextSize = 11
+    tab.Parent = tabs
+    Instance.new("UICorner",tab).CornerRadius = UDim.new(0,8)
+    tabButtons[name] = tab
+    tab.MouseButton1Click:Connect(function()
+        showPage(name)
+    end)
+end
+
+showPage("Início")
+
+--------------------------------------------------
+-- CRIAÇÃO DAS PÁGINAS
+--------------------------------------------------
+
+-- Início
+local home = createPage("Início")
+createToggle(home, "Dashboard", function(enabled) notify("Painel principal") end)
+createToggle(home, "Status do Hub", function(enabled) notify("Hub operacional") end)
+createToggle(home, "Murder Mystery 2", function(enabled) notify("Jogo: MM2") end)
+createToggle(home, "Servidor atual", function(enabled) notify("JobId: "..game.JobId) end)
+createToggle(home, "Atualizações", function(enabled) notify("Versão 11.0") end)
+
+-- ESP
+local esp = createPage("ESP")
+createToggle(esp, "ESP Players", function(enabled)
+    if enabled then startESP() else stopESP() end
+end)
+createToggle(esp, "ESP Assassino", function(enabled)
+    notify(enabled and "Assassinos destacados" or "Destaque removido")
+end)
+createToggle(esp, "ESP Sheriff", function(enabled)
+    notify(enabled and "Sheriffs destacados" or "Destaque removido")
+end)
+createToggle(esp, "ESP Innocents", function(enabled)
+    notify(enabled and "Inocentes destacados" or "Destaque removido")
+end)
+createToggle(esp, "Mostrar nomes", function(enabled)
+    notify(enabled and "Nomes visíveis" or "Nomes ocultos")
+end)
+createToggle(esp, "Mostrar distância", function(enabled)
+    notify(enabled and "Distância visível" or "Distância oculta")
+end)
+createToggle(esp, "Highlight Players", function(enabled)
+    if enabled then startESP() else stopESP() end
+end)
+createToggle(esp, "ESP Arma", function(enabled)
+    if enabled then startWeaponESP() else stopWeaponESP() end
+end)
+createToggle(esp, "Notificar Arma", function(enabled)
+    if enabled then startWeaponNotify() else stopWeaponNotify() end
+end)
+
+-- Combate
+local combat = createPage("Combate")
+createToggle(combat, "Combat", function(enabled)
+    notify(enabled and "Modo combate ativado" or "Modo combate desativado")
+end)
+createToggle(combat, "Target", function(enabled)
+    notify(enabled and "Alvo manual ativado" or "Alvo manual desativado")
+end)
+
+local hitboxToggle = createToggle(combat, "Hitbox", function(enabled)
+    if enabled then
+        startHitbox()
+        if hitboxStepper then hitboxStepper.Visible = true end
+    else
+        stopHitbox()
+        if hitboxStepper then hitboxStepper.Visible = false end
+    end
+end)
+
+hitboxStepper = createStepper(combat, 1, 15, hitboxSize, function(value)
+    hitboxSize = value
+end)
+hitboxStepper.Visible = false
+
+createToggle(combat, "Aimbot Assassino", function(enabled)
+    if enabled then
+        startAimbot("Assassino")
+        notify("Aimbot Assassino ativado (FOV 120)")
+    else
+        stopAimbot()
+    end
+end)
+createToggle(combat, "Aimbot Sheriff", function(enabled)
+    if enabled then
+        startAimbot("Sheriff")
+        notify("Aimbot Sheriff ativado (FOV 200)")
+    else
+        stopAimbot()
+    end
+end)
+createToggle(combat, "Mostrar FOV", function(enabled)
+    showFOV = enabled
+    if enabled and aimbotActive then
+        showFOVCircle()
+    else
+        hideFOVCircle()
+    end
+end)
+createToggle(combat, "Silent Aim", function(enabled)
+    notify(enabled and "Silent Aim ativado" or "Silent Aim desativado")
+end)
+createToggle(combat, "Auto Target", function(enabled)
+    notify(enabled and "Auto Target ativado" or "Auto Target desativado")
+end)
+
+-- Painel Shot
+local shotPanelToggle = createToggle(combat, "Painel Shot", function(enabled)
+    if enabled then
+        if not shotPanel then
+            shotPanel = Instance.new("Frame")
+            shotPanel.Size = UDim2.new(1,-3,0,90)
+            shotPanel.BackgroundColor3 = Color3.fromRGB(20,20,25)
+            shotPanel.BorderSizePixel = 0
+            shotPanel.Parent = combat
+            Instance.new("UICorner", shotPanel).CornerRadius = UDim.new(0,9)
+
+            local layout = Instance.new("UIListLayout")
+            layout.Padding = UDim.new(0,4)
+            layout.Parent = shotPanel
+
+            createToggle(shotPanel, "ESP Shot", function(espEnabled)
+                if espEnabled then
+                    startESPShot()
+                else
+                    stopESPShot()
+                end
+            end)
+
+            createButton(shotPanel, "Shot Murder", function()
+                shootMurder()
+            end)
+        end
+        shotPanel.Visible = true
+    else
+        if shotPanel then
+            shotPanel.Visible = false
+            if espShotActive then
+                stopESPShot()
+            end
+        end
+    end
+end)
+
+-- Player
+local playerPage = createPage("Player")
+createToggle(playerPage, "WalkSpeed", function(enabled)
+    walkSpeedValue = enabled and 50 or 16
+    applyMovement()
+    notify(enabled and "WalkSpeed: 50" or "WalkSpeed: 16")
+end)
+createToggle(playerPage, "JumpPower", function(enabled)
+    jumpPowerValue = enabled and 100 or 50
+    applyMovement()
+    notify(enabled and "JumpPower: 100" or "JumpPower: 50")
+end)
+createToggle(playerPage, "Player Info", function(enabled)
+    notify("Player: "..player.Name.." | ID: "..player.UserId)
+end)
+createToggle(playerPage, "Character", function(enabled)
+    notify(enabled and "Personagem focado" or "Personagem normal")
+end)
+createToggle(playerPage, "Animations", function(enabled)
+    notify(enabled and "Animações alteradas" or "Animações padrão")
+end)
+
+-- Visual
+local visual = createPage("Visual")
+createToggle(visual, "Full Bright", function(enabled)
+    if enabled then startFullBright() else stopFullBright() end
+end)
+createToggle(visual, "No Fog", function(enabled)
+    if enabled then startNoFog() else stopNoFog() end
+end)
+createToggle(visual, "Night Mode", function(enabled)
+    Lighting.ClockTime = enabled and 0 or 14
+    notify(enabled and "Modo noturno ativado" or "Modo diurno")
+end)
+createToggle(visual, "Graphics", function(enabled)
+    notify(enabled and "Gráficos no máximo" or "Gráficos padrão")
+end)
+createToggle(visual, "UI Effects", function(enabled)
+    notify(enabled and "Efeitos de UI ativados" or "Efeitos desativados")
+end)
+createToggle(visual, "Performance Mode", function(enabled)
+    if enabled then
+        settings().Rendering.QualityLevel = 1
+    else
+        settings().Rendering.QualityLevel = 7
+    end
+    notify(enabled and "Performance Mode ativado" or "Performance Mode desativado")
+end)
+
+-- Troll (novas funções)
+local troll = createPage("Troll")
+
+-- Troll Player
+createToggle(troll, "Troll Player", function(enabled)
+    if enabled then
+        if not trollPlayerPanel then
+            trollPlayerPanel = Instance.new("Frame")
+            trollPlayerPanel.Size = UDim2.new(1,-3,0,160)
+            trollPlayerPanel.BackgroundColor3 = Color3.fromRGB(20,20,25)
+            trollPlayerPanel.BorderSizePixel = 0
+            trollPlayerPanel.Parent = troll
+            Instance.new("UICorner", trollPlayerPanel).CornerRadius = UDim.new(0,9)
+
+            local panelLayout = Instance.new("UIListLayout")
+            panelLayout.Padding = UDim.new(0,4)
+            panelLayout.Parent = trollPlayerPanel
+
+            -- Lista de jogadores
+            local playerList = Instance.new("ScrollingFrame")
+            playerList.Size = UDim2.new(1,-6,0,100)
+            playerList.BackgroundTransparency = 1
+            playerList.BorderSizePixel = 0
+            playerList.ScrollBarThickness = 2
+            playerList.CanvasSize = UDim2.new(0,0,0,0)
+            playerList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            playerList.Parent = trollPlayerPanel
+
+            local listLayout = Instance.new("UIListLayout")
+            listLayout.Padding = UDim.new(0,2)
+            listLayout.Parent = playerList
+
+            -- Atualizar lista
+            local function updatePlayerList()
+                for _, child in ipairs(playerList:GetChildren()) do
+                    if child:IsA("TextButton") then
+                        child:Destroy()
+                    end
+                end
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= player then
+                        local btn = Instance.new("TextButton")
+                        btn.Size = UDim2.new(1,0,0,30)
+                        btn.BackgroundColor3 = NORMAL
+                        btn.BorderSizePixel = 0
+                        btn.Text = plr.Name
+                        btn.TextColor3 = TEXT
+                        btn.Font = Enum.Font.GothamMedium
+                        btn.TextSize = 11
+                        btn.Parent = playerList
+                        Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+
+                        btn.MouseButton1Click:Connect(function()
+                            selectedTrollTarget = plr
+                            notify("Alvo: " .. plr.Name)
+                        end)
+                    end
+                end
+            end
+
+            updatePlayerList()
+
+            -- Atualizar periodicamente
+            local updateConnection
+            updateConnection = RunService.Heartbeat:Connect(function()
+                if not trollPlayerPanel or not trollPlayerPanel.Visible then
+                    updateConnection:Disconnect()
+                    return
+                end
+                -- Atualiza a cada 2 segundos
+                if tick() % 2 < 0.05 then
+                    updatePlayerList()
+                end
+            end)
+
+            -- Botão Stop (ejetar)
+            createButton(trollPlayerPanel, "Stop (Ejetar)", function()
+                if selectedTrollTarget then
+                    ejectPlayer(selectedTrollTarget)
+                else
+                    notify("Selecione um jogador primeiro")
+                end
+            end)
+        end
+        trollPlayerPanel.Visible = true
+    else
+        if trollPlayerPanel then
+            trollPlayerPanel.Visible = false
+            selectedTrollTarget = nil
+        end
+    end
+end)
+
+-- Troll Chat
+createToggle(troll, "Troll Chat", function(enabled)
+    if enabled then
+        if not trollChatPanel then
+            trollChatPanel = Instance.new("Frame")
+            trollChatPanel.Size = UDim2.new(1,-3,0,80)
+            trollChatPanel.BackgroundColor3 = Color3.fromRGB(20,20,25)
+            trollChatPanel.BorderSizePixel = 0
+            trollChatPanel.Parent = troll
+            Instance.new("UICorner", trollChatPanel).CornerRadius = UDim.new(0,9)
+
+            local chatLayout = Instance.new("UIListLayout")
+            chatLayout.Padding = UDim.new(0,4)
+            chatLayout.Parent = trollChatPanel
+
+            local textBox = Instance.new("TextBox")
+            textBox.Size = UDim2.new(1,-6,0,30)
+            textBox.BackgroundColor3 = NORMAL
+            textBox.BorderSizePixel = 0
+            textBox.PlaceholderText = "Digite a frase..."
+            textBox.Text = ""
+            textBox.TextColor3 = TEXT
+            textBox.Font = Enum.Font.Gotham
+            textBox.TextSize = 12
+            textBox.Parent = trollChatPanel
+            Instance.new("UICorner", textBox).CornerRadius = UDim.new(0,6)
+
+            createButton(trollChatPanel, "Spam", function()
+                local msg = textBox.Text
+                if msg ~= "" then
+                    if spamConnection then
+                        spamConnection:Disconnect()
+                    end
+                    spamActive = true
+                    spamConnection = RunService.Heartbeat:Connect(function()
+                        sendChatMessage(msg)
+                        wait(0.1) -- intervalo curto
+                    end)
+                    notify("Spam iniciado")
+                else
+                    notify("Digite uma mensagem")
+                end
+            end)
+
+            createButton(trollChatPanel, "Parar Spam", function()
+                if spamConnection then
+                    spamConnection:Disconnect()
+                    spamConnection = nil
+                    spamActive = false
+                    notify("Spam parado")
+                end
+            end)
+        end
+        trollChatPanel.Visible = true
+    else
+        if trollChatPanel then
+            trollChatPanel.Visible = false
+            if spamConnection then
+                spamConnection:Disconnect()
+                spamConnection = nil
+                spamActive = false
+            end
+        end
+    end
+end)
+
+-- Teleporte
+local teleport = createPage("Teleporte")
+createToggle(teleport, "Map", function(enabled)
+    if enabled then teleportToMap() end
+end)
+createToggle(teleport, "Lobby", function(enabled)
+    if enabled then teleportToLobby() end
+end)
+createToggle(teleport, "Random Player", function(enabled)
+    if enabled then
+        local alive = getAlivePlayers()
+        if #alive > 0 then teleportToPlayer(alive[math.random(#alive)]) end
+    end
+end)
+createToggle(teleport, "Murderer", function(enabled)
+    if enabled then
+        for _, plr in ipairs(getAlivePlayers()) do
+            if getRole(plr) == "Assassino" then teleportToPlayer(plr); break end
+        end
+    end
+end)
+createToggle(teleport, "Sheriff", function(enabled)
+    if enabled then
+        for _, plr in ipairs(getAlivePlayers()) do
+            if getRole(plr) == "Sheriff" then teleportToPlayer(plr); break end
+        end
+    end
+end)
+createToggle(teleport, "TP Arma", function(enabled)
+    if enabled then teleportToGun() end
+end)
+createButton(teleport, "TP Geral", function()
+    teleportAllPlayers()
+end)
+
+-- Inventário
+local inventory = createPage("Inventário")
+createToggle(inventory, "Knives", function(enabled)
+    if enabled then equipKnife() end
+end)
+createToggle(inventory, "Guns", function(enabled)
+    if enabled then equipGun() end
+end)
+createToggle(inventory, "Effects", function(enabled)
+    notify("Efeitos automáticos")
+end)
+createToggle(inventory, "Emotes", function(enabled)
+    notify("Use controles do jogo")
+end)
+createToggle(inventory, "Pets", function(enabled)
+    notify("Pets equipados automaticamente")
+end)
+createToggle(inventory, "Inventory Preview", function(enabled)
+    notify(enabled and "Visualizando inventário" or "Inventário oculto")
+end)
+
+-- Perfil
+local profile = createPage("Perfil")
+local card = Instance.new("Frame")
+card.Size = UDim2.new(1,-3,0,120)
+card.BackgroundColor3 = Color3.fromRGB(23,23,28)
+card.BorderSizePixel = 0
+card.Parent = profile
+Instance.new("UICorner",card).CornerRadius = UDim.new(0,12)
+
+local avatar = Instance.new("ImageLabel")
+avatar.Size = UDim2.fromOffset(85,85)
+avatar.Position = UDim2.fromOffset(14,17)
+avatar.BackgroundColor3 = Color3.fromRGB(35,35,42)
+avatar.BorderSizePixel = 0
+avatar.Parent = card
+Instance.new("UICorner",avatar).CornerRadius = UDim.new(1,0)
+
+local thumbnail = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+avatar.Image = thumbnail
+
+local displayName = Instance.new("TextLabel")
+displayName.Position = UDim2.fromOffset(112,17)
+displayName.Size = UDim2.new(1,-125,0,25)
+displayName.BackgroundTransparency = 1
+displayName.Text = player.DisplayName
+displayName.TextColor3 = Color3.new(1,1,1)
+displayName.TextXAlignment = Enum.TextXAlignment.Left
+displayName.Font = Enum.Font.GothamBold
+displayName.TextSize = 17
+displayName.Parent = card
+
+local username = Instance.new("TextLabel")
+username.Position = UDim2.fromOffset(112,44)
+username.Size = UDim2.new(1,-125,0,18)
+username.BackgroundTransparency = 1
+username.Text = "@" .. player.Name
+username.TextColor3 = Color3.fromRGB(160,160,168)
+username.TextXAlignment = Enum.TextXAlignment.Left
+username.Font = Enum.Font.Gotham
+username.TextSize = 11
+username.Parent = card
+
+local userid = Instance.new("TextLabel")
+userid.Position = UDim2.fromOffset(112,66)
+userid.Size = UDim2.new(1,-125,0,18)
+userid.BackgroundTransparency = 1
+userid.Text = "UserId: " .. player.UserId
+userid.TextColor3 = Color3.fromRGB(120,120,128)
+userid.TextXAlignment = Enum.TextXAlignment.Left
+userid.Font = Enum.Font.Gotham
+userid.TextSize = 10
+userid.Parent = card
+
+createToggle(profile, "Jogo: Murder Mystery 2", function(enabled) notify("MM2") end)
+createToggle(profile, "Servidor atual", function(enabled) notify("JobId: "..game.JobId) end)
+createToggle(profile, "Informações públicas", function(enabled) notify(enabled and "Público" or "Privado") end)
+
+-- Discord
+local discord = createPage("Discord")
+local discordLabel = Instance.new("TextLabel")
+discordLabel.Size = UDim2.new(1,-3,0,80)
+discordLabel.BackgroundColor3 = NORMAL
+discordLabel.BorderSizePixel = 0
+discordLabel.Text = "Phoenix scripts | scripts todo dia:\nhttps://discord.gg/QPM2aXKjQ"
+discordLabel.TextColor3 = TEXT
+discordLabel.Font = Enum.Font.GothamMedium
+discordLabel.TextSize = 12
+discordLabel.TextWrapped = true
+discordLabel.TextXAlignment = Enum.TextXAlignment.Center
+discordLabel.TextYAlignment = Enum.TextYAlignment.Center
+discordLabel.Parent = discord
+Instance.new("UICorner",discordLabel).CornerRadius = UDim.new(0,9)
+Instance.new("UIStroke",discordLabel).Color = Color3.fromRGB(35,35,42)
+
+createButton(discord, "Copiar", function()
+    local link = "https://discord.gg/QPM2aXKjQ"
+    if setclipboard then
+        setclipboard(link)
+    elseif syn and syn.set_clipboard then
+        syn.set_clipboard(link)
+    else
+        -- fallback
+    end
+    notify("Cole esse link no seu navegador")
+end)
+
+-- Configurações
+local settings = createPage("Configurações")
+createToggle(settings, "Tema vermelho", function(enabled) notify(enabled and "Tema vermelho" or "Tema padrão") end)
+createToggle(settings, "Animações", function(enabled) notify(enabled and "Animações ativadas" or "Desativadas") end)
+createToggle(settings, "Interface compacta", function(enabled) notify(enabled and "Compacta" or "Normal") end)
+createToggle(settings, "Notificações", function(enabled) notification.Visible = enabled end)
+createToggle(settings, "Efeitos da interface", function(enabled) notify(enabled and "Efeitos ativados" or "Desativados") end)
+createToggle(settings, "Resetar interface", function(enabled)
+    if enabled then main.Position = UDim2.new(.5,-285,.5,-190); notify("Interface resetada") end
+end)
+
+--------------------------------------------------
+-- ABRIR / FECHAR E ARRASTAR
+--------------------------------------------------
+
+floating.MouseButton1Click:Connect(function()
+    main.Visible = not main.Visible
+end)
+
+local dragging = false
+local dragStart
+local startPosition
+
+main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPosition = main.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+notify("LK MM2 carregado com sucesso!")
